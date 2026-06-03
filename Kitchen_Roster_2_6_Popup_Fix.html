@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kitchen Roster 2.6 Popup Fix</title>
+<style>
+body{font-family:Arial,sans-serif;margin:10px}
+#toolbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+button,input{padding:8px}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{border:1px solid #999;padding:3px}
+.shift{width:100%;min-height:22px;height:22px;border:none;resize:none;overflow:hidden}
+.staff{font-weight:bold;min-width:110px}
+#menu{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999}
+#share{display:none;background:white;padding:10px}
+#menu .panel{background:white;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:2px solid #666;border-radius:12px;padding:10px;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+#menu button{display:block;width:100%;margin:4px 0}
+
+#staffModal{display:none;position:fixed;inset:0;background:white;z-index:10000;padding:20px}
+#staffModal button{display:block;width:100%;margin:10px 0;padding:12px}
+</style><script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script></head><body>
+<h2>Kitchen Roster 2.6 Popup Fix</h2>
+<div id="toolbar">
+<input type="date" id="weekDate" onchange="dates();save()">
+<button onclick="nextWeek()">📅 Create Next Week</button>
+<button onclick="loadWeek()">📂 Open Week</button>
+<button onclick="shareTable()">📤 Share Table</button><button onclick="shareImage()">💾 Save Image</button>
+<button onclick="manageStaff()">👥 Manage Staff</button><button onclick="resetData()">🧹 Reset Data</button>
+</div>
+<table id="roster"></table>
+<div id="menu"><div class="panel">
+<button onclick="fill('11:30-fin')">11:30-fin</button>
+<button onclick="fill('5:30-fin')">5:30-fin</button>
+<button onclick="fill('6-fin')">6-fin</button>
+<button onclick="fill('11:30-fin\n5:30-fin')">Split Shift</button>
+<button onclick="customShift()">Custom Shift</button><button onclick="fill('')">Clear</button>
+<button onclick="closeMenu()">Close</button>
+</div></div>
+<div id="share"></div>
+<div id="staffModal">
+<h2>Manage Staff</h2>
+<div id="staffList"></div>
+<button onclick="addStaff()">➕ Add Staff</button>
+<button onclick="closeStaff()">❌ Close</button>
+</div>
+<script>
+let staff=JSON.parse(localStorage.getItem('staffList')||'["Sylvia","Hinemoa","Haimu","Lily-May","Raz","Watariki","Chels","Bailee"]');
+let active=null;
+function build(){
+let h='<tr><th>Staff</th>';for(let i=0;i<7;i++)h+='<th id=d'+i+'></th>';h+='</tr>';
+staff.forEach(s=>{h+='<tr><td class=staff>'+s+'</td>';for(let d=0;d<7;d++)h+='<td><textarea class=shift readonly onclick="openMenu(this)" oninput="grow(this);save()"></textarea></td>';h+='</tr>';});
+roster.innerHTML=h;dates();
+}
+function grow(e){e.style.height='22px';e.style.height=e.scrollHeight+'px'}
+function dates(){if(!weekDate.value)return;let st=new Date(weekDate.value);let days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];for(let i=0;i<7;i++){let d=new Date(st);d.setDate(st.getDate()+i);document.getElementById('d'+i).innerText=days[i]+' '+d.getDate();}}
+function openMenu(c){active=c;menu.style.display='block'}
+function closeMenu(){menu.style.display='none'}
+function fill(t){if(active){active.value=t;grow(active);save()}closeMenu()}
+function customShift(){
+ let s=prompt('Enter custom shift');
+ if(s && active){active.value=s;grow(active);save();}
+ closeMenu();
+}
+function data(){return [...document.querySelectorAll('.shift')].map(x=>x.value)}
+function setData(a){document.querySelectorAll('.shift').forEach((x,i)=>{x.value=a[i]||'';grow(x)})}
+function save(){if(weekDate.value){localStorage.setItem('r_'+weekDate.value,JSON.stringify(data()));localStorage.setItem('lastWeek',weekDate.value);}}
+function loadWeek(){let d=localStorage.getItem('r_'+weekDate.value);if(d)setData(JSON.parse(d))}
+function nextWeek(){if(!weekDate.value)return;let cur=data();let d=new Date(weekDate.value);d.setDate(d.getDate()+7);weekDate.value=d.toISOString().split('T')[0];dates();setData(cur);save()}
+function weekText(){if(!weekDate.value)return '';let s=new Date(weekDate.value);let e=new Date(weekDate.value);e.setDate(s.getDate()+6);return s.getDate()+' '+s.toLocaleString('default',{month:'short'})+' - '+e.getDate()+' '+e.toLocaleString('default',{month:'short'})+' '+e.getFullYear();}
+function shareTable(){
+ let vals=[...document.querySelectorAll('.shift')];
+ let html='<button onclick="closeShare()">← Back to Edit</button>'+
+ '<div style="display:inline-block">'+
+ '<h2 style="margin:4px 0">KITCHEN ROSTER</h2>'+
+ '<h3 style="margin:4px 0 12px 0">'+weekText()+'</h3>'+
+ '<table style="width:100%;font-size:18px;border-collapse:collapse">';
+ html+=roster.rows[0].outerHTML;
+ let idx=0;
+ for(let r=1;r<roster.rows.length;r++){
+   html+='<tr><td><b>'+staff[r-1]+'</b></td>';
+   for(let c=0;c<7;c++){
+      html+='<td style="white-space:pre-line;padding:8px">'+(vals[idx++].value||'')+'</td>';
+   }
+   html+='</tr>';
+ }
+ html+='</table></div>';
+ share.innerHTML=html;
+ share.style.display='block';
+
+}
+function sharePhone(){
+ let vals=[...document.querySelectorAll('.shift')];let idx=0;
+ let html='<h2>KITCHEN ROSTER</h2><h3>'+weekText()+'</h3><button onclick="closeShare()">Close</button>';
+ let days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+ for(let r=0;r<staff.length;r++){html+='<hr><b>'+staff[r]+'</b><br>';for(let c=0;c<7;c++){let v=vals[idx++].value.trim();if(v)html+=days[c]+': '+v.replace(/\n/g,' / ')+'<br>';}} 
+ share.innerHTML=html;share.style.display='block';
+}
+
+
+
+
+function renderStaffList(){
+ let h='';
+ staff.forEach((s,i)=>{
+   h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #ccc">'+
+   '<span>'+s+'</span>'+
+   '<span><button onclick="renameStaffByIndex('+i+')">✏️</button> <button onclick="deleteStaffByIndex('+i+')">🗑️</button></span>'+
+   '</div>';
+ });
+ document.getElementById('staffList').innerHTML=h;
+}
+
+function manageStaff(){renderStaffList();staffModal.style.display='block';}
+function closeStaff(){staffModal.style.display='none';}
+
+function addStaff(){
+ let rosterBackup=data();
+ let n=prompt("New staff name");
+ if(!n) return;
+ staff.push(n.trim());
+ saveStaff(); build(); setData(rosterBackup); save();
+ renderStaffList();
+}
+
+function renameStaffByIndex(i){
+ let rosterBackup=data();
+ let n=prompt("New name",staff[i]);
+ if(!n) return;
+ staff[i]=n.trim();
+ saveStaff(); renderStaffList();
+ build(); setData(rosterBackup); save();
+}
+
+function deleteStaffByIndex(i){
+ let rosterBackup=data();
+ let name=staff[i];
+ if(!confirm("Delete "+name+"?")) return;
+ staff.splice(i,1);
+ saveStaff();
+ renderStaffList();
+ build(); setData(rosterBackup); save();
+}
+
+function resetData(){
+ if(!confirm("Delete ALL roster data?")) return;
+ localStorage.clear();
+ alert("Data cleared. Reopen app.");
+}
+function saveStaff(){localStorage.setItem('staffList',JSON.stringify(staff));}
+function saveStaff(){localStorage.setItem('staffList',JSON.stringify(staff));}
+
+
+async function shareImage(){
+  shareTable();
+  const target=document.getElementById('share');
+
+  const oldWidth = target.style.width;
+  const oldDisplay = target.style.display;
+
+  target.style.width = 'fit-content';
+  target.style.display = 'inline-block';
+
+  try{
+    const canvas=await html2canvas(target,{
+      scale:3,
+      scrollX:0,
+      scrollY:0,
+      backgroundColor:'#ffffff'
+    });
+
+    const a=document.createElement('a');
+    a.href=canvas.toDataURL('image/png');
+    a.download='Kitchen_Roster.png';
+    a.click();
+
+    alert('Roster image saved. You can now share it from Downloads or Photos.');
+
+  }catch(e){
+    alert('Could not generate image');
+  }finally{
+    target.style.width = oldWidth;
+    target.style.display = oldDisplay;
+  }
+}
+
+function closeShare(){share.style.display='none'}
+if(localStorage.getItem('lastWeek')){weekDate.value=localStorage.getItem('lastWeek');}
+build();
+if(weekDate.value) loadWeek();
+
+</script></body></html>
